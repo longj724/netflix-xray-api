@@ -1,3 +1,4 @@
+// External Dependencies
 import { createRoute, z } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { jsonContent } from 'stoker/openapi/helpers';
@@ -5,9 +6,8 @@ import { createErrorSchema } from 'stoker/openapi/schemas';
 
 const tags = ['TMDB'];
 
-// Schema definitions
 const SearchQuerySchema = z.object({
-  query: z.string().min(1),
+  title: z.string(),
 });
 
 const ShowEpisodeParamsSchema = z.object({
@@ -21,7 +21,7 @@ const MovieIdParamsSchema = z.object({
 });
 
 // Response schemas
-const MovieSearchResultSchema = z.object({
+export const MovieSearchResultSchema = z.object({
   results: z.array(
     z.object({
       id: z.number(),
@@ -33,6 +33,14 @@ const MovieSearchResultSchema = z.object({
   ),
   total_results: z.number(),
   total_pages: z.number(),
+});
+
+export const MovieSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  overview: z.string().optional(),
+  release_date: z.string().optional(),
+  poster_path: z.string().nullable(),
 });
 
 const TVShowSearchResultSchema = z.object({
@@ -94,7 +102,6 @@ const MovieDetailsSchema = z.object({
   }),
 });
 
-// Route definitions
 export const searchMovie = createRoute({
   method: 'get',
   path: '/search/movie',
@@ -103,14 +110,15 @@ export const searchMovie = createRoute({
     query: SearchQuerySchema,
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(
-      MovieSearchResultSchema,
-      'Movie search results'
-    ),
-    [HttpStatusCodes.BAD_REQUEST]: jsonContent(
+    [HttpStatusCodes.OK]: jsonContent(MovieSchema, 'Movie search results'),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
       createErrorSchema(SearchQuerySchema),
       'Invalid search query'
     ),
+    // [HttpStatusCodes.BAD_REQUEST]: jsonContent(
+    //   createErrorSchema(SearchQuerySchema),
+    //   'Invalid search query'
+    // ),
   },
 });
 

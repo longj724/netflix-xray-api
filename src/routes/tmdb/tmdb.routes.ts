@@ -6,8 +6,14 @@ import { createErrorSchema } from 'stoker/openapi/schemas';
 
 const tags = ['TMDB'];
 
-const SearchQuerySchema = z.object({
-  title: z.string(),
+const SearchMovieQuerySchema = z.object({
+  title: z.string().min(1),
+});
+
+const SearchTVShowQuerySchema = z.object({
+  title: z.string().min(1),
+  seasonNumber: z.string(),
+  episodeNumber: z.string(),
 });
 
 const ShowEpisodeParamsSchema = z.object({
@@ -21,7 +27,7 @@ const MovieIdParamsSchema = z.object({
 });
 
 // Response schemas
-export const MovieSearchResultSchema = z.object({
+const MovieResultSchema = z.object({
   results: z.array(
     z.object({
       id: z.number(),
@@ -35,15 +41,7 @@ export const MovieSearchResultSchema = z.object({
   total_pages: z.number(),
 });
 
-export const MovieSchema = z.object({
-  id: z.number(),
-  title: z.string(),
-  overview: z.string().optional(),
-  release_date: z.string().optional(),
-  poster_path: z.string().nullable(),
-});
-
-const TVShowSearchResultSchema = z.object({
+const TVShowResultSchema = z.object({
   results: z.array(
     z.object({
       id: z.number(),
@@ -55,6 +53,14 @@ const TVShowSearchResultSchema = z.object({
   ),
   total_results: z.number(),
   total_pages: z.number(),
+});
+
+const MovieSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  overview: z.string().optional(),
+  release_date: z.string().optional(),
+  poster_path: z.string().nullable(),
 });
 
 const EpisodeDetailsSchema = z.object({
@@ -107,18 +113,27 @@ export const searchMovie = createRoute({
   path: '/search/movie',
   tags,
   request: {
-    query: SearchQuerySchema,
+    query: SearchMovieQuerySchema,
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(MovieSchema, 'Movie search results'),
-    [HttpStatusCodes.NOT_FOUND]: jsonContent(
-      createErrorSchema(SearchQuerySchema),
-      'Invalid search query'
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        id: z.number(),
+        title: z.string(),
+        overview: z.string().optional(),
+        release_date: z.string().optional(),
+        poster_path: z.string().nullable(),
+      }),
+      'Exact movie match'
     ),
-    // [HttpStatusCodes.BAD_REQUEST]: jsonContent(
-    //   createErrorSchema(SearchQuerySchema),
-    //   'Invalid search query'
-    // ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      createErrorSchema(SearchMovieQuerySchema),
+      'No exact movie match found'
+    ),
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: jsonContent(
+      createErrorSchema(z.object({})),
+      'Internal server error'
+    ),
   },
 });
 
@@ -127,16 +142,20 @@ export const searchTVShow = createRoute({
   path: '/search/tv',
   tags,
   request: {
-    query: SearchQuerySchema,
+    query: SearchTVShowQuerySchema,
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(
-      TVShowSearchResultSchema,
+      TVShowResultSchema,
       'TV show search results'
     ),
-    [HttpStatusCodes.BAD_REQUEST]: jsonContent(
-      createErrorSchema(SearchQuerySchema),
-      'Invalid search query'
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      createErrorSchema(SearchTVShowQuerySchema),
+      'No TV shows found'
+    ),
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: jsonContent(
+      createErrorSchema(z.object({})),
+      'Internal server error'
     ),
   },
 });

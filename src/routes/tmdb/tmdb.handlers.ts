@@ -91,7 +91,7 @@ export const searchMovie: AppRouteHandler<SearchMovieRoute> = async (c) => {
 
 export const searchTVShow: AppRouteHandler<SearchTVShowRoute> = async (c) => {
   try {
-    const { title, seasonNumber, episodeNumber } = c.req.valid('query');
+    const { title, episodeTitle } = c.req.valid('query');
 
     const response = await axios.get(`${TMDB_BASE_URL}/search/tv`, {
       params: {
@@ -126,7 +126,7 @@ export const searchTVShow: AppRouteHandler<SearchTVShowRoute> = async (c) => {
 
     const exactMatch = results.find(
       // @ts-ignore
-      (show) => show.name === title
+      (show) => show.name.toLowerCase() === title.toLowerCase()
     );
 
     if (!exactMatch) {
@@ -137,7 +137,7 @@ export const searchTVShow: AppRouteHandler<SearchTVShowRoute> = async (c) => {
               {
                 code: 'not_found',
                 path: ['title'],
-                message: 'No tv show found with this title',
+                message: 'No exact TV show match found',
               },
             ],
             name: 'NotFoundError',
@@ -151,18 +151,66 @@ export const searchTVShow: AppRouteHandler<SearchTVShowRoute> = async (c) => {
     const { id: showId } = exactMatch;
 
     const showDetailsResponse = await axios.get(
-      `${TMDB_BASE_URL}/tv/${showId}/season/${seasonNumber}/episode/${episodeNumber}`,
+      `${TMDB_BASE_URL}/tv/${showId}`,
       {
-        params: {
-          append_to_response: 'credits',
-        },
         headers: {
           Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}`,
         },
       }
     );
 
-    return c.json(showDetailsResponse.data, HttpStatusCodes.OK);
+    const { seasons } = showDetailsResponse.data;
+
+    // Search through each season for the episode
+    for (const season of seasons) {
+      const seasonResponse = await axios.get(
+        `${TMDB_BASE_URL}/tv/${showId}/season/${season.season_number}`,
+        {
+          headers: {
+            Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}`,
+          },
+        }
+      );
+
+      const episode = seasonResponse.data.episodes.find(
+        (ep: any) => ep.name.toLowerCase() === episodeTitle.toLowerCase()
+      );
+
+      if (episode) {
+        // Get episode details with credits
+        const episodeResponse = await axios.get(
+          `${TMDB_BASE_URL}/tv/${showId}/season/${season.season_number}/episode/${episode.episode_number}`,
+          {
+            params: {
+              append_to_response: 'credits',
+            },
+            headers: {
+              Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}`,
+            },
+          }
+        );
+
+        return c.json(episodeResponse.data, HttpStatusCodes.OK);
+      }
+    }
+
+    // If we get here, we didn't find the episode
+    return c.json(
+      {
+        error: {
+          issues: [
+            {
+              code: 'not_found',
+              path: ['episodeTitle'],
+              message: 'No episode found with this title',
+            },
+          ],
+          name: 'NotFoundError',
+        },
+        success: false,
+      },
+      HttpStatusCodes.NOT_FOUND
+    );
   } catch (error) {
     return c.json(
       {

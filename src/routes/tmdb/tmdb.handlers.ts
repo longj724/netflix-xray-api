@@ -1,7 +1,6 @@
 // External Dependencies
 import axios from 'axios';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
 // Internal Dependencies
 import type { AppRouteHandler } from '@/lib/types';
@@ -68,7 +67,37 @@ export const searchMovie: AppRouteHandler<SearchMovieRoute> = async (c) => {
       }
     );
 
-    return c.json(movieDetailsResponse.data, HttpStatusCodes.OK);
+    const movieData = movieDetailsResponse.data;
+
+    // Get detailed information for first 10 cast members only
+    const castDetailsPromises = movieData.credits.cast
+      .slice(0, 10)
+      .map(async (castMember: any) => {
+        const personResponse = await axios.get(
+          `${TMDB_BASE_URL}/person/${castMember.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}`,
+            },
+          }
+        );
+
+        return {
+          ...castMember,
+          details: personResponse.data,
+        };
+      });
+
+    // Wait for all person details requests to complete
+    const castWithDetails = await Promise.all(castDetailsPromises);
+
+    // Replace the first 10 cast members with detailed ones, keep the rest as is
+    movieData.credits.cast = [
+      ...castWithDetails,
+      ...movieData.credits.cast.slice(10),
+    ];
+
+    return c.json(movieData, HttpStatusCodes.OK);
   } catch (error) {
     return c.json(
       {
@@ -190,7 +219,37 @@ export const searchTVShow: AppRouteHandler<SearchTVShowRoute> = async (c) => {
           }
         );
 
-        return c.json(episodeResponse.data, HttpStatusCodes.OK);
+        const episodeData = episodeResponse.data;
+
+        // Get detailed information for first 10 cast members only
+        const castDetailsPromises = episodeData.credits.cast
+          .slice(0, 10)
+          .map(async (castMember: any) => {
+            const personResponse = await axios.get(
+              `${TMDB_BASE_URL}/person/${castMember.id}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}`,
+                },
+              }
+            );
+
+            return {
+              ...castMember,
+              details: personResponse.data,
+            };
+          });
+
+        // Wait for all person details requests to complete
+        const castWithDetails = await Promise.all(castDetailsPromises);
+
+        // Replace the first 10 cast members with detailed ones, keep the rest as is
+        episodeData.credits.cast = [
+          ...castWithDetails,
+          ...episodeData.credits.cast.slice(10),
+        ];
+
+        return c.json(episodeData, HttpStatusCodes.OK);
       }
     }
 
